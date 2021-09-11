@@ -1,0 +1,712 @@
+---
+title: "Unsupervised Learning Techniques"
+author: "Beaty"
+date: "9/9/2021"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Data Understanding
+
+
+1. Define the question:
+
+I am undertaking a project that will inform the marketing department on the most relevant marketing strategies that will result in the highest no. of sales (total price including tax).
+
+
+2. Metric for success:
+
+- Cleaned data.
+- Graphical representation of the relationships in the data as well as the distributions of the different variables in the data.
+- Perform the different Unsupervised learning techniques as required.
+- Sound conclusions and recommendations to Carrefour as per the analysis done.
+
+
+3. Understanding the context:
+
+I am a data analyst at Carrefour Kenya and I am currently undertaking a project that will inform the marketing department on the most relevant marketing strategies that will result in the highest no. of sales (total price including tax). 
+
+My project has been divided into four parts where I will explore a recent marketing dataset by first performing an exploratory data analysis to understand the data, then I will carry out dimensionality reduction to obtain a set of principal variables. I will then an association analysis, to find relationships between the different items sold so as to be able to make recommendations for the customers based on whether they have similar items to boost Carrefour's sales. I will also check for anomalies on the available sales data.
+
+
+4. Experimental design:
+
+Steps to be undertaken during this study include:
+- Loading the data & needed packages.
+- Exploring the dataset.
+- Cleaning the data.
+- Exploratory data analysis.
+- Implementing the solution for each of the unsupervised learning techniques.
+- Conclusions & recommendations.
+
+
+Loading packages
+```{r}
+# Loading the libraries
+library(corrplot)
+library(PerformanceAnalytics)
+library(ggplot2)
+library(data.table)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(data.table)
+library(janitor)
+library(caret)
+library(scales) 
+library(grid)
+library(devtools)
+library(ggbiplot)
+library(mclust)
+library(clustvarsel)
+library(lessR)
+
+```
+
+
+# Part 1
+```{r}
+# Loading the data
+data <- fread('http://bit.ly/CarreFourDataset')
+
+# Previewing the data
+head(data)
+```
+
+
+
+```{r}
+# Checking the shape of the data
+dim(data)
+```
+
+The dataset has 1000 entries and 16 columns.
+
+```{r}
+# Checking column names of our data 
+colnames(data)
+```
+Our column titles are as listed above. We will need to standardize our column names to remove the spaces
+
+```{r}
+#Checking column data types
+str(data)
+```
+The data types are fine and we don't need to convert any.
+
+```{r}
+#Checking summary statistics of our dataset
+summary(data)
+```
+From the summaries we can see that the 'gross margin percentage' has only one value all through. Thus it won't give us much insight. 
+
+
+data Cleaning
+
+```{r}
+#Checking for missing values
+colSums(is.na(data))
+```
+
+There are no null values in our data.
+
+```{r}
+#Checking for duplicates
+length(which(duplicated(data)))
+```
+
+There no duplicates in our data.
+
+```{r}
+#Standardizing column names
+#Changing case to lower case
+names(data) <- tolower(names(data))
+
+#Replacing spaces with underscore
+names(data) <- gsub(" ","_", names(data))
+
+#Confirming the changes
+colnames(data)
+```
+
+The column names are now standardized and uniform
+
+```{r}
+#Dropping irrelevant columns: we shall drop 'gross margin percentage' column since it's values won't give us much insight
+data<-data %>% select(-gross_margin_percentage)
+
+#Previewing the dataset
+colnames(data)
+```
+
+
+
+Checking for outliers in numerical columns
+```{r}
+#Checking for outliers in unit_price column
+boxplot(data$unit_price, main = "Boxplot on Unit_price column", horizontal = TRUE)
+```
+
+There are no outliers in the 'unit_price' column. The customers pick items worth between 5 to 100 shillings
+
+```{r}
+#Checking for outliers in quantity column
+boxplot(data$quantity, main = "Boxplot on Quantity column", horizontal = TRUE)
+```
+
+There are no outliers in the 'quantity' column. The customers pick between 1 to 10 items with most picking between 3-8.
+
+```{r}
+#Checking for outliers in tax column
+boxplot(data$tax, main = "Boxplot on Tax column", horizontal = TRUE)
+```
+
+There are a few outliers on the tax column, with most having a tax value between 0-45. The outliers may be due to the fact that some products are usually heavily taxed. We wont remove these outliers.
+
+
+```{r}
+#Checking for outliers in cogs column
+boxplot(data$cogs, main = "Boxplot on Cogs column", horizontal = TRUE)
+```
+
+The cogs column also had some outliers. Most of its values lie between 0- 900. We wont remove the outliers too
+
+```{r}
+#Checking for outliers in ratingcolumn
+boxplot(data$rating, main = "Boxplot on Rating column", horizontal = TRUE)
+```
+
+The rating column had no outliers. The ratings were between 4-10, with most being 5.5-8.5
+
+
+```{r}
+#Checking for outliers in Gross Income column
+boxplot(data$gross_income, main = "Boxplot on Gross Income column", horizontal = TRUE)
+```
+
+The gross income has values between 0-45, with most having a gross income between 6-45. There were a few outliers, which we wont delete since it is possible that some values are much higher.
+
+
+Checking for anomalies in categorical data
+```{r}
+#Checking for anomalies in branch column
+print(unique(data$branch))
+```
+There are 3 branches in our data and seems to be no anomalies.
+
+
+```{r}
+#Checking for anomalies in customer type column
+print(unique(data$customer_type))
+```
+There are 2 customer types in our data, still no anomalies
+
+
+```{r}
+#Checking for anomalies in gender column
+print(unique(data$gender))
+```
+The values in the gender column have no anomalies as there are only 2 unique values
+
+
+```{r}
+#Checking for anomalies in branch column
+print(unique(data$product_line))
+```
+
+There are 6 unique values in the product line, and seem to be no anomalies.
+
+```{r}
+#Checking for anomalies in branch column
+print(unique(data$payment))
+```
+
+On the payment types, there are 3 unique values and no anomalies.
+
+We shall split the date & time columns, so as to get more insights from them
+
+```{r}
+#Splitting the date column
+data <- separate(data, "date", c("month", "day", "year"), sep = "/")
+
+#Splitting time column
+data <- separate(data, "time", c("hour", "minutes"), sep = ":")
+#Changing into factors
+data$year<- factor (data$year)
+data$month<- factor(data$month)
+data$day <- factor(data$day)
+data$hour <- factor(data$hour)
+```
+
+
+Removing irrelevant columns
+```{r}
+#Checking our columns
+colnames(data)
+#Removing irrelevant columns
+data = data %>% select(-invoice_id)
+colnames(data)
+```
+
+
+Univariate Analysis
+
+```{r}
+#Create a subset of numerical columns
+num_col <- unlist(lapply(data, is.numeric))
+
+data_num <- subset(data, select=num_col) 
+
+#Previewing the dataset
+head(data_num)
+```
+
+Measures of Central tendency
+```{r}
+#Create a dataframe with measures of central tendency of our numerical columns
+
+stats <- data.frame(
+  Mean = apply(data_num, 2, mean), 
+  Median = apply(data_num, 2, median), 
+  Min = apply(data_num, 2, min),  
+  Max = apply(data_num, 2, max)) 
+stats
+```
+
+The numerical columns have their means and medians as lised above. We can also see the ranges for each column in the dataframe above.
+
+
+Measured of spread
+```{r}
+#Create a dataframe with measures of spread of our numerical columns
+stats2 <- data.frame(
+  Variance= apply(data_num, 2, var),  
+  Std = apply(data_num, 2, sd),
+  Skewness = apply(data_num, 2, skewness), 
+  Kurtosis = apply(data_num, 2, kurtosis)) 
+stats2
+```
+
+Our measures of spread are as shown above. We can see the variance, std deviation, kurtosis and skewness
+
+
+Plots
+```{r}
+# A pie chart showing the distribution of Customers by branch
+branch <- data.frame(bran = data$branch)
+PieChart(bran, hole = 0, values = "%", data = branch,
+         fill = c("lightblue", "pink", "lightgreen" ), main = "Distribution of Customers by branch")
+```
+34% of the customers were from branch A, while branch B & C both had 33% of the total customers.
+
+```{r}
+# A bar plot showing the distribution of products by product line
+barplot(table(data$product_line), col = "gold", main = "Distribution of Product Line", las=2)
+tabyl(data$product_line, sort = TRUE)
+
+```
+
+Fashion accessories had the highest frequency at 17.8%, followed by Food and bevarages product line at 17.4 %. Health and beauty had the lowest frequency at 15.2%, followed by Home and lifestyle at 16%
+
+
+```{r}
+# A pie chart showing the distribution of Customers by Payment type
+payment <- data.frame(pay = data$payment)
+PieChart(pay, hole = 0, values = "%", data = payment,
+         fill = c("magenta", "lightgreen", "cyan" ), main = "Distribution of Customers by Payment type")
+```
+Cash and e-wallet had an equal proportion of customers at 34% while credit cards were 31% of the total dataset.
+
+
+```{r}
+# A bar plot showing the distribution of Customers by Gender
+barplot(table(data$gender), col = c("red","blue"), main = "Distribution of Customers by gender")
+```
+
+There was an equal distribution of male and female customers.
+
+```{r}
+# A bar plot showing the distribution of Customers by Customer type
+customer_type <-ggplot(data, aes(x=customer_type, y = tax, fill=customer_type)) +
+  geom_bar(stat="identity")+theme_minimal()
+customer_type
+```
+
+Carrefour members are slightly higher than the normal customer type.
+
+
+```{r}
+#Distribution of Customers by day
+plot(data$day, col = "hotpink2", main = "Distribution of Customers by day")
+```
+
+Most sales happened on the 15th(which was quite surprising), followed by the 25th. This could be attributed to restocking of monthly supplies due to payday.
+
+```{r}
+#Distribution of Customers by month
+plot(data$month, col = "cyan", main = "Distribution of Customers by month")
+```
+
+January had the highest number of sales as compared to the rest of the months, which may be attributed to back-to-school shenigans, as well as people restocking supplies at the beginning of the year. then March. February had the least amount of sales of all months.
+
+
+```{r}
+#Distribution of Customers by hour of day
+plot(data$hour, col = "hotpink2", main = "Distribution of Customers by hour")
+```
+
+Most customers come in at 7pm, probably as they are headed home after work. The second highest traffic rate is at 1pm, probably to get items for lunch. The least amount of traffic is at 5pm.
+
+
+
+
+Implementing the solution
+
+```{r}
+#Creating a copy of the dataset
+data_copy <- data
+
+#Feature Engineering
+data_copy$branch1<-as.integer(factor(data_copy$branch))
+data_copy$customer_type1<-as.integer(factor(data_copy$customer_type))
+data_copy$gender1<-as.integer(factor(data_copy$gender))
+data_copy$productline<-as.integer(factor(data_copy$product_line))
+data_copy$payment1<- as.integer(factor(data_copy$payment))
+drop_cols = c('branch', 'customer_type',	'gender',	'product_line', 'payment','year','day', 'month', 'hour', 'minutes')
+data_copy<-data_copy%>%select(-drop_cols)
+head(data_copy)
+```
+
+Dimensionality Reduction
+```{r}
+colnames(data_copy)
+```
+
+PCA
+
+We shall exclude categorical variables since PCA works best with numerical data
+```{r}
+#passing dataset to prcomp
+data_copy.pca <- prcomp(data_copy[,c(1,3,4,5,7)], center = TRUE, scale= TRUE)
+#previewing the object
+summary(data_copy.pca)
+```
+
+PC1 explains 89% of the variation in the dataset.
+PC2 explains 10% of the variation.
+
+```{r}
+#call str to have a look at the PCA object
+str(data_copy.pca)
+```
+
+```{r}
+options(repr.plot.height = 20, repr.plot.width = 20)
+
+ggbiplot(data_copy.pca)
+```
+
+
+Feature Selection
+
+a) Filter method
+```{r}
+# Determining the correlated features
+# create correlation matrix
+correlationMatrix <- cor(data_copy)
+
+# find variables that are highly correlated
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.75) # selects features with more than 0.
+
+# print indexes of highly correlated attributes
+highlyCorrelated
+```
+
+```{r}
+#Removing redundant features
+data_copy2<-data_copy[-highlyCorrelated]
+
+#Performing our graphical comparison of the correlation matrices 
+par(mfrow = c(1, 2))
+corrplot(correlationMatrix, order = "hclust")
+corrplot(cor(data_copy2), order = "hclust")
+```
+
+
+b)Wrapper Method
+
+```{r}
+#Sequential forward greedy search (default)
+out = clustvarsel(data_copy, G = 1:16)
+out
+```
+
+
+
+```{r}
+Subset1 = data_copy[,out$subset]
+mod = Mclust(Subset1, G = 1:5)
+summary(mod)
+```
+
+
+```{r}
+plot(mod,c("classification"))
+```
+
+
+
+# Part 3
+```{r}
+#Loading package
+library(arules)
+```
+
+
+Loading the library & data
+```{r}
+#Loading the dataset
+
+data2 <-read.transactions("C:/Users/user/Downloads/R Markdowns/Supermarket_Sales_Dataset II.csv", sep = ",")
+
+#Previewing the first 5 transactions
+inspect(data2[1:5])
+```
+
+```{r}
+# Verifying the object's class to show us transactions as the type of data that we will need
+# ---
+# 
+class(data2)
+```
+
+```{r}
+#Generating a summary of the transactions to give us some information on the most purchased items, distribution of the item sets (no. of items purchased in each transaction), etc.
+
+summary(data2)
+```
+
+The top 5 most frequently bought items are mineral water, eggs, spaghetti, french fries & chocolate
+
+```{r}
+#Exploring the frequency of transactions
+itemFrequency(data2[, 8:10],type = "absolute")
+round(itemFrequency(data2[, 8:10],type = "relative")*100,2)
+```
+
+```{r}
+#Displaying top 10 most common items in the transactions dataset and the items whose relative importance is at least 10%
+
+par(mfrow = c(1, 2))
+
+# plot the frequency of items
+itemFrequencyPlot(data2, topN = 10,col="magenta", main = "Frequency plot showing most frequently bought items")
+itemFrequencyPlot(data2, support = 0.1,col="cyan", main = "Items With At Least Ten Percent Frequency ")
+```
+
+
+```{r}
+#Checking for the 10 least popular items
+least_items = itemFrequency(data2, type = "relative")
+head(sort(least_items), 10)
+```
+
+Building a model based on association rules.
+```{r}
+#using the apriori function 
+
+# We use Min Support as 0.001 and confidence as 0.8
+ 
+rules <- apriori (data2, parameter = list(supp = 0.001, conf = 0.8))
+rules
+```
+
+We use measures of significance and interest on the rules, determining which ones are interesting and which to discard. However since we built the model using 0.001 Min support and confidence as 0.8 we obtained 74 rules.
+
+However, in order to illustrate the sensitivity of the model to these two parameters, we will see what happens if we increase the support or lower the confidence level.
+
+```{r}
+# Building a apriori model with Min Support as 0.002 and confidence as 0.8.
+rules2 <- apriori (data2,parameter = list(supp = 0.002, conf = 0.8)) 
+
+# Building apriori model with Min Support as 0.002 and confidence as 0.6.
+rules3 <- apriori (data2, parameter = list(supp = 0.001, conf = 0.6)) 
+
+rules2
+
+rules3
+```
+
+In our first example, we increased the minimum support of 0.001 to 0.002 and model rules went from 271 to only 2. This would lead us to understand that using a high level of support can make the model lose interesting rules. 
+
+In the second example, we decreased the minimum confidence level to 0.6 and the number of model rules went from 271 to 545. This would mean that using a low confidence level increases the number of rules to quite an extent and many will not be useful.
+
+
+
+We can perform an exploration of our model through the use of the summary function as shown
+
+Upon running the code, the function would give us information about the model i.e. the size of rules, depending on the items that contain these rules. 
+
+In our above case, most rules have 3 and 4 items though some rules do have upto 6. 
+
+More statistical information such as support, lift and confidence is also provided.
+
+```{r}
+# Generating a summary
+summary(rules)
+```
+
+```{r}
+#Observing rules built in our model i.e. first 10 model rules
+
+inspect(rules[1:10])
+```
+
+```{r}
+rules<-sort(rules, by="confidence", decreasing=TRUE)
+inspect(rules[1:20])
+```
+
+The results reveal that the model is 100% confident that a person buying french fries, mushroom cream sauce and pasta will buy escalope, 91% confident that a person buying eggs, mineral water and pasta will buy shrimp or 89% confident that a person buying brownies, eggs & ground beef will buy mineral water, etc,.
+
+```{r}
+# If we're interested in making a promotion  and we wanted to determine the items that customers buying shrimps might buy 
+
+# Subset the rules
+shrimp <- subset(rules, subset = lhs %pin% "shrimp")
+
+# Order by confidence
+shrimp<-sort(shrimp, by="confidence", decreasing=TRUE)
+
+# inspect top 5
+inspect(shrimp[1:5])
+```
+
+Since there is a 100% chance that one buying shrimp will pick it up with cake, olive oil and mineral water, the supermarket can bundle these up during promotion season. Or showcase offers for these products on their apps for users who've previously bought shrimp.
+
+
+# Part 4
+
+Loading the packages
+```{r}
+library(anomalize)
+library(tidyverse)
+library(tibble)
+```
+
+Loading the data
+
+```{r}
+data3 = fread('http://bit.ly/CarreFourSalesDataset')
+head(data3)
+```
+
+```{r}
+#Checking the shape of the dataset
+dim(data3)
+```
+
+The dataset has 1000 entries and 2 rows
+
+```{r}
+#Checking for missing values
+colSums(is.na(data3))
+```
+
+No missing values in our dataset
+
+```{r}
+#Checking for duplicates
+length(which(duplicated(data3)))
+```
+
+No duplicates in our dataset
+
+
+```{r}
+#Checking for outliers
+boxplot(data3$Sales, main= 'Boxplot on the sales')
+```
+
+There a few outliers on the sales column. We won't remove them since it is possible some of the sales figures are quite high.
+
+```{r}
+#Checking for anomalies
+print(unique(data3$Date))
+```
+
+From the 89 unique values, we can see there are no anomalies in our data
+
+```{r}
+#Checking the datatype
+str(data3)
+```
+
+The date is a character, thus we will have to convert it
+
+```{r}
+#Converting the date to date datatype
+data3$Date = as.Date(data3$Date, format = "%m/%d/%y")
+
+#Confirm the change
+str(data3)
+```
+
+## Explorative Data Analysis
+
+a)Univariate analysis
+
+```{r}
+summary(data3)
+```
+We can see the minimum sale was at 10.68, with the highest amount being at 1042.65. Our mean sale amount was 322.97 while the median was 253.85. 
+
+
+```{r}
+#Visualizing the distribution of Sales column
+hist(data3$Sales, col = 'hotpink3', main = "Distribution of the sales", xlab = "Sales")
+```
+
+
+```{r}
+#Visualizing the distribution of the date column
+ggplot(data3, aes(x=Date, y=Sales)) + geom_line()
+```
+
+Anomalies in Transactions
+```{r}
+#Sorting dates in ascending order
+data3  = data3[order(data3$Date),]    
+
+#Converting the dataset to tibble
+data3_tb <- as_tibble(data3)
+head(data3_tb)
+
+```
+
+```{r}
+#Grouping the daily transactions
+data3_count <- data3 %>% group_by(Date) %>% tally()
+colnames(data3_count) <- c('Date', 'Count')
+head(data3_count)
+```
+
+We can see the total number of sales daily. There were 12 sales on 1/1/2020, 8 sales on 2/1/2020 etc
+
+
+```{r}
+#Visualizing our data 
+data3_count %>%
+    time_decompose(Count) %>%
+    anomalize(remainder) %>%
+    time_recompose() %>%
+    plot_anomalies(time_recomposed = TRUE, ncol = 3, alpha_dots = 0.5) +
+    ggtitle( "Anomaly Recomposition")
+```
+
+There were no anomalies detected in the number of daily transactions done.
+
+
+
